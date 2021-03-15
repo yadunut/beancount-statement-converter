@@ -8,10 +8,6 @@ import (
 	"time"
 )
 
-type Transaction struct {
-	Date time.Time
-}
-
 func handleError(err error) {
 	if err != nil {
 		panic(err)
@@ -27,19 +23,39 @@ func main() {
 	fmt.Printf(result)
 }
 
-func parseRevolutTransaction(file io.Reader) (string,error) {
+type Transaction struct {
+	Date    string
+	Payee   string
+	Account string
+	Amount  string
+}
+
+func (t *Transaction) String(bank string) string {
+	formatStr := `%s ! "%s" ""
+  Assets:%s:SGD %s SGD
+  Expenses:%s
+
+`
+	return fmt.Sprintf(formatStr, t.Date, t.Payee, t.Amount, bank, t.Account)
+}
+
+func parseRevolutTransaction(file io.Reader) (string, error) {
 	csvReader := csv.NewReader(file)
 	csvReader.Comma = ';'
 
 	records, err := csvReader.ReadAll()
 	if err != nil {
-		return "",err
+		return "", err
 	}
 
 	results := make([]string, 20)
 
 	for i, record := range records {
 		// Skip first line in CSV as headers
+		transaction := Transaction{
+			Payee:   record[2],
+			Account: record[9],
+		}
 		if i == 0 {
 			continue
 		}
@@ -47,9 +63,7 @@ func parseRevolutTransaction(file io.Reader) (string,error) {
 		if err != nil {
 			return "", err
 		}
-		timeStr := time.Format("2006-01-02")
-		payee := record[2]
-		account := record[9]
+		transaction.Date = time.Format("2006-01-02")
 
 		amount := ""
 		if record[3] != "" {
@@ -59,16 +73,13 @@ func parseRevolutTransaction(file io.Reader) (string,error) {
 		} else {
 			return "", fmt.Errorf("no paid in / paid out amount")
 		}
-		formatStr :=`%s ! "%s" ""
-  Assets:Revolut:SGD %s SGD
-  Expenses:%s
-
-`
-		results = append(results, fmt.Sprintf(formatStr , timeStr, payee, amount, account))
+		transaction.Amount = amount
+		results = append(results, transaction.String("Revolut"))
 	}
+
 	reverse(results)
 	result := ""
-	for _, line := range results  {
+	for _, line := range results {
 		result += line
 	}
 
@@ -77,6 +88,6 @@ func parseRevolutTransaction(file io.Reader) (string,error) {
 
 func reverse(s []string) {
 	for i, j := 0, len(s)-1; i < j; i, j = i+1, j-1 {
-        s[i], s[j] = s[j], s[i]
-    }
+		s[i], s[j] = s[j], s[i]
+	}
 }
